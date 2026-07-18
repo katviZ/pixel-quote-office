@@ -1315,34 +1315,95 @@ function Gate({ onAgree }){
 }
 
 /* ───────── quote history panel ───────── */
-function HistoryPanel({ history, onOpen, onDelete, onClose }){
+/* Profile Panel — renamed from HistoryPanel. Titled "{employee}'s Profile"
+   plus a count. Each row still has Open + Delete PLUS a "⋯ Docs" menu
+   with 4 popup documents (Structural / Handover / Site Prereq / Content
+   Guide). Quote PDF stays only on the CURRENT quote via header dropdown
+   because it uses window.print() on the live React PrintSheet. */
+function HistoryPanel({ history, employee, onOpen, onDelete, onGenerate, onClose }){
+  const [openMenu,setOpenMenu] = useState(null); // stores h.ref of row whose menu is open
+  useEffect(()=>{
+    if(!openMenu) return;
+    const close = ()=>setOpenMenu(null);
+    window.addEventListener("click", close);
+    return ()=>window.removeEventListener("click", close);
+  },[openMenu]);
+
+  const totalValue = history.reduce((s,h)=>s+(h.grandTotal||0),0);
+  const docs = [
+    { kind:"structural",    icon:"📐", label:"Structural PDF",  sub:"Fabricator · load · MCB · SF" },
+    { kind:"handover",      icon:"🎯", label:"Handover Document",sub:"Install completion certificate" },
+    { kind:"site_prereq",   icon:"📋", label:"Site Prerequisites", sub:"Pre-install checklist" },
+    { kind:"content_guide", icon:"🎬", label:"Content Guide",    sub:"Content creation brief" },
+  ];
+
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(6,0,26,.75)",backdropFilter:"blur(4px)",display:"flex",justifyContent:"flex-end",fontFamily:MN}}>
-      <div onClick={e=>e.stopPropagation()} className="vr-scroll" style={{width:420,maxWidth:"94vw",height:"100%",overflowY:"auto",background:C.navyLight,borderLeft:`1px solid ${C.line}`,boxShadow:"-20px 0 60px rgba(0,0,0,.5)",padding:20}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-          <h2 style={{fontFamily:FR,fontSize:21,margin:0}}>Quote History</h2>
-          <button onClick={onClose} style={{background:"transparent",border:"none",color:C.cream,fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+      <div onClick={e=>e.stopPropagation()} className="vr-scroll" style={{width:460,maxWidth:"94vw",height:"100%",overflowY:"auto",background:C.navyLight,borderLeft:`1px solid ${C.line}`,boxShadow:"-20px 0 60px rgba(0,0,0,.5)",padding:22}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:4,gap:12}}>
+          <div>
+            <div style={{fontSize:10,letterSpacing:3,color:C.magenta,fontWeight:700,textTransform:"uppercase"}}>Profile · Signed in</div>
+            <h2 style={{fontFamily:FR,fontSize:24,margin:"2px 0 0",lineHeight:1.1}}>👤 {employee||"Unknown"}<em style={{color:C.lavender,fontStyle:"italic",fontSize:16,fontWeight:400}}>&apos;s quotes</em></h2>
+          </div>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:C.cream,fontSize:26,cursor:"pointer",lineHeight:1,padding:0}}>×</button>
         </div>
-        <div style={{fontSize:11,color:C.lavender,opacity:.7,marginBottom:16}}>Saved automatically each time you export a PDF. Stored in this browser.</div>
-        {history.length===0 && <div style={{color:C.lavender,opacity:.6,fontSize:13,padding:"30px 0",textAlign:"center"}}>No saved quotes yet.<br/>Export a quote and it'll appear here.</div>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,margin:"14px 0 16px"}}>
+          <div style={{background:`${C.magenta}12`,border:`1px solid ${C.magenta}44`,borderRadius:10,padding:"9px 12px"}}>
+            <div style={{fontSize:9,letterSpacing:2,color:C.lavender,textTransform:"uppercase",fontWeight:700,opacity:.75}}>Quotes generated</div>
+            <div style={{fontFamily:FR,fontSize:24,fontWeight:600,marginTop:1}}>{history.length}</div>
+          </div>
+          <div style={{background:`${C.amber}12`,border:`1px solid ${C.amber}44`,borderRadius:10,padding:"9px 12px"}}>
+            <div style={{fontSize:9,letterSpacing:2,color:C.lavender,textTransform:"uppercase",fontWeight:700,opacity:.75}}>Pipeline value</div>
+            <div style={{fontFamily:FR,fontSize:19,fontWeight:600,marginTop:2,color:C.amber}}>{E.fmtINR(totalValue)}</div>
+          </div>
+        </div>
+        <div style={{fontSize:11,color:C.lavender,opacity:.7,marginBottom:14}}>Each quote below can generate any of 4 documents — click <b style={{color:C.cream}}>⋯</b> to open the menu.</div>
+        {history.length===0 && <div style={{color:C.lavender,opacity:.6,fontSize:13,padding:"30px 0",textAlign:"center"}}>No quotes yet.<br/>Configure &amp; export one, and it'll live here forever.</div>}
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {history.map((h)=>(
-            <div key={h.ref+h.savedAt} style={{background:C.navy,border:`1px solid ${C.line}`,borderRadius:12,padding:"12px 14px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
-                <span style={{fontFamily:MO,fontSize:12,color:C.lavender,fontWeight:600}}>{h.ref}</span>
-                <span style={{fontSize:10,color:C.lavender,opacity:.6}}>{h.date}</span>
+          {history.map((h)=>{
+            const isMenuOpen = openMenu === h.ref;
+            return (
+              <div key={h.ref+h.savedAt} style={{background:C.navy,border:`1px solid ${C.line}`,borderRadius:12,padding:"12px 14px",position:"relative"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8}}>
+                  <span style={{fontFamily:MO,fontSize:12,color:C.lavender,fontWeight:600}}>{h.ref}</span>
+                  <span style={{fontSize:10,color:C.lavender,opacity:.6}}>{h.date}</span>
+                </div>
+                <div style={{fontFamily:FR,fontSize:19,color:C.magenta,margin:"3px 0 2px"}}>{E.fmtINR(h.grandTotal)}</div>
+                <div style={{fontSize:11.5,color:C.cream,opacity:.85}}>
+                  <span style={{textTransform:"uppercase",letterSpacing:1,color:h.mode==="curved"?C.amber:C.lavender,fontWeight:700,fontSize:10}}>{h.mode}</span> · {h.series} · {h.sizeFt}
+                  {h.client?` · ${h.client}`:""}{h.project?` · ${h.project}`:""}
+                </div>
+                {(h.overrides && Object.keys(h.overrides).length>0) || (h.customLines && h.customLines.length>0) ? (
+                  <div style={{marginTop:5,fontSize:9.5,color:C.amber,letterSpacing:.4,fontWeight:600}}>
+                    {h.overrides && Object.keys(h.overrides).length>0 ? "🎚 override" : ""}
+                    {h.customLines && h.customLines.length>0 ? ` ＋ ${h.customLines.length} custom` : ""}
+                  </div>
+                ) : null}
+                <div style={{display:"flex",gap:8,marginTop:10}}>
+                  <button onClick={()=>onOpen(h)} style={{flex:1,background:`linear-gradient(135deg, ${C.purple}, ${C.magenta})`,border:"none",color:C.cream,borderRadius:8,padding:"7px 0",fontWeight:700,fontSize:12,cursor:"pointer"}}>Open</button>
+                  <button onClick={(e)=>{ e.stopPropagation(); setOpenMenu(isMenuOpen?null:h.ref); }} title="Generate a document from this quote" style={{background:isMenuOpen?C.magenta:"transparent",border:`1px solid ${isMenuOpen?C.magenta:C.line}`,color:isMenuOpen?C.cream:C.lavender,borderRadius:8,padding:"7px 12px",fontSize:14,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>⋯</button>
+                  <button onClick={()=>onDelete(h.ref)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.lavender,borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer"}}>Delete</button>
+                </div>
+                {isMenuOpen && (
+                  <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"100%",right:14,marginTop:6,minWidth:260,background:C.navyLight,border:`1px solid ${C.line}`,borderRadius:10,padding:6,boxShadow:"0 16px 40px rgba(0,0,0,.55)",zIndex:20}}>
+                    <div style={{fontSize:9,letterSpacing:2,color:C.magenta,fontWeight:700,textTransform:"uppercase",padding:"6px 10px 4px"}}>Generate for {h.ref}</div>
+                    {docs.map(d=>(
+                      <button key={d.kind} onClick={()=>{ setOpenMenu(null); onGenerate(d.kind, h); }}
+                        style={{display:"flex",alignItems:"flex-start",gap:12,width:"100%",padding:"8px 10px",background:"transparent",border:"none",color:C.cream,cursor:"pointer",borderRadius:6,textAlign:"left",fontFamily:MN,transition:"background .15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background=`${C.magenta}18`}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                        <span style={{fontSize:15,marginTop:1,color:C.amber}}>{d.icon}</span>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700}}>{d.label}</div>
+                          <div style={{fontSize:9.5,color:C.lavender,opacity:.7,marginTop:1}}>{d.sub}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={{fontFamily:FR,fontSize:18,color:C.magenta,margin:"3px 0 2px"}}>{E.fmtINR(h.grandTotal)}</div>
-              <div style={{fontSize:11.5,color:C.cream,opacity:.85}}>
-                <span style={{textTransform:"uppercase",letterSpacing:1,color:h.mode==="curved"?C.amber:C.lavender,fontWeight:700,fontSize:10}}>{h.mode}</span> · {h.series} · {h.sizeFt}
-                {h.client?` · ${h.client}`:""}{h.project?` · ${h.project}`:""}
-              </div>
-              <div style={{display:"flex",gap:8,marginTop:10}}>
-                <button onClick={()=>onOpen(h)} style={{flex:1,background:`linear-gradient(135deg, ${C.purple}, ${C.magenta})`,border:"none",color:C.cream,borderRadius:8,padding:"7px 0",fontWeight:700,fontSize:12,cursor:"pointer"}}>Open</button>
-                <button onClick={()=>onDelete(h.ref)} style={{background:"transparent",border:`1px solid ${C.line}`,color:C.lavender,borderRadius:8,padding:"7px 12px",fontSize:12,cursor:"pointer"}}>Delete</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
@@ -1434,6 +1495,14 @@ function App(){
   const [manualCab,setManualCab]=useState(qDef("mcab",sDef("manualCab",false))===true||qDef("mcab",sDef("manualCab","false"))==="true");
   const [fitMode,setFitMode]=useState(qDef("ft",sDef("fitMode","optimal"))==="nearest"?"nearest":"optimal");
   const [historyOpen,setHistoryOpen]=useState(false);
+  // Documents ▾ dropdown on the header — 5 doc types per current quote.
+  const [docsMenuOpen,setDocsMenuOpen]=useState(false);
+  useEffect(()=>{
+    if(!docsMenuOpen) return;
+    const close=()=>setDocsMenuOpen(false);
+    window.addEventListener("click", close);
+    return ()=>window.removeEventListener("click", close);
+  },[docsMenuOpen]);
   const [history,setHistory]=useState(()=>{ try{ return JSON.parse(localStorage.getItem("pqm_history")||"[]"); }catch{ return []; } });
   const [compareSet,setCompareSet]=useState(()=>{ try{ return JSON.parse(localStorage.getItem("pqm_compare")||"[]"); }catch{ return []; } });
 
@@ -1584,35 +1653,169 @@ function App(){
     const rec={ ref:meta.ref, date:meta.date, savedAt:new Date().toISOString(),
       series:result.product.series, sizeFt:`${result.builtWft.toFixed(1)}×${result.builtHft.toFixed(1)} ft`,
       grandTotal:result.grandTotal,
-      mode,productId,pitch,cabIndex,orientation,widthFt,heightFt,curveMode,preset,sagittaMm,radiusMm,curveType,cabWeightKg,project,client };
+      mode,productId,pitch,cabIndex,orientation,widthFt,heightFt,curveMode,preset,sagittaMm,radiusMm,curveType,cabWeightKg,project,client,
+      // Office-specific — store overrides + custom lines so historical docs
+      // regenerate with the SAME price the client originally saw. Also stamp
+      // which employee generated the quote (for profile ownership).
+      overrides: { ...overrides }, customLines: [...(customLines||[])], employee };
     saveHistory([rec, ...history.filter(h=>h.ref!==rec.ref)].slice(0,50));
   };
+
+  /* Recompute a full result from a stored history entry — used by the 3 new
+     client-facing document generators when they're fired from the Profile
+     panel (a past quote, not the currently-active one). */
+  const recomputeQuote = (h)=>{
+    if(!h||!db) return null;
+    try {
+      return E.computeQuote({
+        mode:h.mode, productId:h.productId, pitch:h.pitch,
+        widthFt:h.widthFt, heightFt:h.heightFt,
+        cabIndex:h.cabIndex, orientation:h.orientation||"native",
+        curveMode:h.curveMode, preset:h.preset,
+        sagittaMm:h.sagittaMm||0, radiusMm:h.radiusMm||0,
+        curveType:h.curveType, cabWeightKg:h.cabWeightKg||14,
+        rateOverride: h.overrides?.rateOverride,
+        ctrlPriceOverride: h.overrides?.ctrlPriceOverride,
+        installRateOverride: h.overrides?.installRateOverride,
+        customLines: h.customLines||[],
+      }, db);
+    } catch { return null; }
+  };
+
+  /* Open a new browser window and stream Atlas-styled HTML into it, then
+     auto-fire window.print() so the browser's Save-as-PDF dialog opens
+     inside the popup. Shared by every document generator. */
+  const openPrintWindow = (html)=>{
+    const w = window.open("", "_blank");
+    if (!w) { alert("Please allow popups for Pixel Quote Max so the document can open."); return false; }
+    w.document.open(); w.document.write(html); w.document.close();
+    return true;
+  };
+
+  /* Standalone popup CSS — used by every document generator. Same design DNA
+     as the PrintSheet's ATLAS_CSS constant, but self-contained so it works
+     inside a fresh window with no shared stylesheet. */
+  const ATLAS_POPUP_CSS = `
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-font-smoothing:antialiased;padding:40px 20px}
+.atlas-print{width:210mm;min-height:297mm;background:#FBF7EF;color:#1A1208;font-family:'Manrope',sans-serif;font-size:10pt;line-height:1.5;position:relative;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.55);margin:0 auto}
+.atlas-print::before{content:'';position:absolute;top:0;left:0;bottom:0;width:14mm;background:linear-gradient(160deg,#4E1178 0%,#9D20D6 55%,#793494 100%);z-index:1}
+.atlas-print::after{content:'';position:absolute;top:0;left:14mm;bottom:0;width:2mm;background:linear-gradient(90deg,#00000022,transparent);z-index:1}
+.atlas-spine{position:absolute;z-index:3;top:14mm;left:0;width:14mm;writing-mode:vertical-rl;transform:rotate(180deg);font-family:'JetBrains Mono',monospace;font-size:7pt;letter-spacing:3.5px;text-transform:uppercase;color:#C89DD9;font-weight:600;padding:8mm 2mm;opacity:.9}
+.atlas-spine b{color:#E5B454;letter-spacing:4px}
+.atlas-page{position:relative;z-index:2;padding:14mm 16mm 14mm 22mm}
+.atlas-super{display:flex;justify-content:space-between;align-items:baseline;font-family:'JetBrains Mono',monospace;font-size:8pt;letter-spacing:3px;text-transform:uppercase;color:#6B5E4A;font-weight:700;margin-bottom:14px;gap:8px;flex-wrap:wrap}
+.atlas-super .grow{margin-left:auto}
+.atlas-stamp{background:#9D20D6;color:#fff;padding:3px 10px;border-radius:2px;letter-spacing:3px;font-weight:800}
+.atlas-stamp.amber{background:#E5B454;color:#3A2500}
+.atlas-office{background:#FEF3C7;color:#B45309;padding:3px 9px;border:1px solid #F59E0B;border-radius:5px;font-weight:800}
+.atlas-brand{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;border-bottom:1px solid #C8BEA6}
+.atlas-brand .name{font-family:'Fraunces',serif;font-size:15pt;font-weight:500;letter-spacing:.5px}
+.atlas-brand .name em{font-style:italic;color:#9D20D6;font-weight:400}
+.atlas-brand .ref{font-family:'JetBrains Mono',monospace;font-size:8.5pt;color:#6B5E4A;letter-spacing:1px}
+.atlas-title{margin:22px 0 12px}
+.atlas-title .kicker{font-family:'JetBrains Mono',monospace;font-size:8pt;letter-spacing:4px;text-transform:uppercase;color:#793494;font-weight:800;margin-bottom:10px}
+.atlas-title h1{font-family:'Fraunces',serif;font-weight:300;font-size:44pt;line-height:.92;letter-spacing:-.03em;color:#1A1208;margin:0 0 8px}
+.atlas-title h1 em{font-style:italic;color:#9D20D6;font-weight:200}
+.atlas-title .lede{font-family:'Fraunces',serif;font-weight:300;font-style:italic;font-size:12.5pt;line-height:1.5;color:#3A2C1A;max-width:82%;margin-top:8px}
+.atlas-plate{border:.4mm solid #1A1208;padding:0;display:grid;grid-template-columns:2fr 1fr 1fr;margin-top:20px}
+.atlas-plate .cell{padding:9px 12px;border-right:.25mm solid #1A1208}
+.atlas-plate .cell:last-child{border-right:none}
+.atlas-plate .k{font-family:'JetBrains Mono',monospace;font-size:7pt;letter-spacing:2.5px;text-transform:uppercase;color:#6B5E4A;font-weight:700;margin-bottom:4px}
+.atlas-plate .v{font-family:'Fraunces',serif;font-size:14pt;font-weight:500;line-height:1.05;color:#1A1208;letter-spacing:-.005em}
+.atlas-plate .v em{font-style:italic;color:#9D20D6;font-weight:400}
+.atlas-plate .v small{display:block;font-family:'JetBrains Mono',monospace;font-size:7.5pt;color:#6B5E4A;margin-top:3px;letter-spacing:.5px;font-weight:500}
+.atlas-ch{margin:26px 0 10px;display:grid;grid-template-columns:52px 1fr auto;align-items:baseline;gap:12px;break-after:avoid}
+.atlas-ch .roman{font-family:'Fraunces',serif;font-style:italic;font-weight:300;font-size:32pt;line-height:.9;color:#9D20D6;letter-spacing:-.02em}
+.atlas-ch .name{font-family:'Fraunces',serif;font-size:18pt;font-weight:400;color:#1A1208;letter-spacing:-.01em;line-height:1.05}
+.atlas-ch .name em{font-style:italic;color:#793494}
+.atlas-ch .name small{display:block;font-family:'JetBrains Mono',monospace;font-size:8pt;letter-spacing:2px;text-transform:uppercase;color:#6B5E4A;font-weight:600;margin-top:4px}
+.atlas-ch .side{font-family:'JetBrains Mono',monospace;font-size:7.5pt;letter-spacing:2.5px;text-transform:uppercase;color:#9D20D6;font-weight:800;background:#F5EFE6;padding:3px 8px;border-radius:2px;align-self:center}
+.atlas-ch .rule{grid-column:2/-1;height:1px;background:linear-gradient(90deg,#1A1208,transparent);margin-top:6px}
+.atlas-duo{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;margin-top:8px;break-inside:avoid}
+.atlas-duo .col-h{font-family:'JetBrains Mono',monospace;font-size:7.5pt;letter-spacing:3px;text-transform:uppercase;color:#9D20D6;font-weight:800;padding:6px 0;margin-bottom:4px;border-bottom:.3mm solid #1A1208}
+.atlas-dl{display:grid;grid-template-columns:1fr auto;gap:0}
+.atlas-dl dt,.atlas-dl dd{padding:5px 0;border-bottom:.15mm dotted #C8BEA6}
+.atlas-dl dt{font-size:9pt;color:#3A2C1A;font-weight:500}
+.atlas-dl dd{font-family:'JetBrains Mono',monospace;font-size:9.5pt;font-weight:600;color:#1A1208;text-align:right;padding-left:8px}
+.atlas-dl dd.hi{color:#9D20D6}
+.atlas-dl dd.good{color:#0E7F4F}
+.atlas-notes{margin-top:14px;padding:12px 14px;background:#F5EFE6;border-left:2px solid #E5B454;font-size:9pt;line-height:1.55;color:#3A2C1A}
+.atlas-notes b{color:#1A1208;font-weight:700}
+.atlas-notes .fine{display:block;margin-top:6px;font-style:italic;color:#6B5E4A;font-size:8.5pt}
+.atlas-foot{margin-top:20px;padding-top:14px;border-top:.3mm solid #1A1208;display:flex;justify-content:space-between;align-items:baseline;font-family:'JetBrains Mono',monospace;font-size:7.5pt;letter-spacing:2px;color:#6B5E4A;text-transform:uppercase;font-weight:700;gap:10px}
+.atlas-foot .brand{font-family:'Fraunces',serif;font-style:italic;font-size:11pt;font-weight:500;text-transform:none;letter-spacing:0;color:#1A1208;text-align:center;line-height:1.2}
+.atlas-foot .brand em{color:#9D20D6}
+.atlas-foot .brand small{display:block;font-family:'JetBrains Mono',monospace;font-size:6.5pt;letter-spacing:2px;text-transform:uppercase;color:#6B5E4A;margin-top:3px;font-style:normal}
+/* Handover / prereq / content-guide specific bits */
+.atlas-check{margin-top:8px;background:#FDFAF3;border:.25mm solid #C8BEA6;padding:12px 16px;font-size:9.5pt;line-height:1.7}
+.atlas-check li{list-style:none;padding-left:24px;position:relative;margin-bottom:3px}
+.atlas-check li::before{content:'';position:absolute;left:0;top:6px;width:12px;height:12px;border:.35mm solid #1A1208;border-radius:2px;background:#F5EFE6}
+.atlas-check li.done::before{background:#0E7F4F;border-color:#0E7F4F}
+.atlas-check li.done::after{content:'✓';position:absolute;left:2px;top:3px;color:#fff;font-size:10pt;font-weight:800}
+.atlas-check li b{color:#1A1208;font-weight:700}
+.atlas-sig{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px;padding:16px;background:#FDFAF3;border:.25mm solid #C8BEA6}
+.atlas-sig .box{border-bottom:.5mm solid #1A1208;padding-bottom:6px;margin-bottom:6px;height:44px}
+.atlas-sig .k{font-family:'JetBrains Mono',monospace;font-size:7.5pt;letter-spacing:2.5px;text-transform:uppercase;color:#6B5E4A;font-weight:700}
+.atlas-sig .v{font-family:'Fraunces',serif;font-size:11pt;font-style:italic;color:#3A2C1A}
+.atlas-pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px;break-inside:avoid}
+.atlas-pill{background:#FBF7EF;border:.3mm solid #1A1208;padding:10px 12px}
+.atlas-pill .k{font-family:'JetBrains Mono',monospace;font-size:7pt;letter-spacing:2.5px;text-transform:uppercase;color:#6B5E4A;font-weight:700;margin-bottom:4px}
+.atlas-pill .v{font-family:'Fraunces',serif;font-size:19pt;font-weight:500;line-height:1;color:#1A1208;letter-spacing:-.01em}
+.atlas-pill .v em{font-style:italic;color:#9D20D6;font-size:13pt;font-weight:400}
+.atlas-pill.hi{background:linear-gradient(135deg,#F5EFE6 0%,#FBF7EF 100%);border-left:3px solid #9D20D6}
+.atlas-pill.warm{border-left:3px solid #E5B454}
+@page{size:A4 portrait;margin:0}
+@media print{body{background:#fff;padding:0}.atlas-print{box-shadow:none;margin:0}}
+`;
+
+  /* Shared popup HTML skeleton — every doc gets the same head + auto-print
+     tail. Only the middle (spine text + page contents) differs per doc. */
+  const atlasPopup = (title, spineText, pageInnerHTML)=> `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,300..700;9..144,1,300..500&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>${ATLAS_POPUP_CSS}</style></head><body>
+<div class="atlas-print">
+  <div class="atlas-spine">${spineText}</div>
+  <div class="atlas-page">${pageInnerHTML}</div>
+</div>
+<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},350);});<\/script>
+</body></html>`;
 
   // Fire-and-forget POST to the SAME Google Apps Script endpoint that public
   // PQM uses for leads. `mode: "office"` routes the payload to the new
   // "Office Quotes" tab in the same workbook. Never blocks the export flow —
   // if the network is down or the endpoint 500s, the PDF still exports.
-  const postOfficeQuote = (kind)=>{
-    if (!result || !SHEET_ENDPOINT) return;
+  const postOfficeQuote = (kind, ctx)=>{
+    // Accepts optional ctx = { r, h } — if provided, uses that quote's data
+    // (used when regenerating a document from a historical Profile entry).
+    // Otherwise falls back to the live current quote (result + meta + state).
+    const r = ctx?.r || result;
+    const h = ctx?.h;
+    if (!r || !SHEET_ENDPOINT) return;
     try {
-      const overridesActive = Object.keys(overrides || {}).filter(k => overrides[k] != null && overrides[k] !== "");
-      const customCount = (customLines || []).length;
-      const customSum = (customLines || []).reduce((s, l) => {
+      const ov = h ? (h.overrides||{}) : (overrides||{});
+      const cl = h ? (h.customLines||[]) : (customLines||[]);
+      const overridesActive = Object.keys(ov).filter(k => ov[k] != null && ov[k] !== "");
+      const customCount = cl.length;
+      const customSum = cl.reduce((s, l) => {
         const amt = (+l.rate) * (+l.qty);
         return s + (Number.isFinite(amt) ? amt : 0);
       }, 0);
+      const rOrientation = h ? (h.orientation||"native") : orientation;
+      const rMode = h ? h.mode : mode;
       const payload = {
         mode: "office",
-        kind, // "quote_pdf" | "structural_pdf"
-        employee,
-        ref: meta.ref,
-        series: result.product.series,
-        pitch: "P" + result.pitch,
-        cabinet: result.cab.label + (orientation === "rotated" ? " ↺" : ""),
-        sizeFt: result.builtWft.toFixed(2) + "×" + result.builtHft.toFixed(2) + "ft " + (mode === "curved" ? "curved" : "flat"),
-        client: client || "",
-        project: project || "",
-        grandTotal: result.grandTotal,
+        kind, // quote_pdf | structural_pdf | handover_pdf | site_prereq_pdf | content_guide_pdf
+        employee: h?.employee || employee,
+        ref: h?.ref || meta.ref,
+        series: r.product.series,
+        pitch: "P" + r.pitch,
+        cabinet: r.cab.label + (rOrientation === "rotated" ? " ↺" : ""),
+        sizeFt: r.builtWft.toFixed(2) + "×" + r.builtHft.toFixed(2) + "ft " + (rMode === "curved" ? "curved" : "flat"),
+        client: (h ? (h.client||"") : (client||"")),
+        project: (h ? (h.project||"") : (project||"")),
+        grandTotal: r.grandTotal,
         overridesActive: overridesActive.join(","),
         customCount,
         customSum,
@@ -1672,10 +1875,16 @@ function App(){
   // HTML + auto-print. More reliable than swapping the main App's PrintSheet
   // via state (which races against window.print's DOM snapshot timing).
   // Browser's "Save as PDF" works inside the new window.
-  const exportStructural = async ()=>{
-    if (!result) return;
-    postOfficeQuote("structural_pdf");
-    const r = result, cv = r.curve;
+  const exportStructural = async (h)=>{
+    // Accepts optional history record — if given, regenerates the structural
+    // report for THAT past quote; otherwise uses the current live result.
+    const r = h ? recomputeQuote(h) : result;
+    if (!r) return;
+    const cv = r.curve;
+    postOfficeQuote("structural_pdf", h ? {r, h} : undefined);
+    const _ref = h?.ref || meta.ref;
+    const _client = h?.client || client || "";
+    const _project = h?.project || project || "";
     const snapURL = await ensureSnapshot();
     const sfColor = r.safetyFactor>=2 ? "#0E7F4F" : r.safetyFactor>=1.5 ? "#B45309" : "#B91C1C";
     const dateStr = new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"});
@@ -1693,7 +1902,7 @@ function App(){
     }).join("");
     const snapImg = snapURL ? `<div class="atlas-ch"><div class="roman">iv</div><div class="name"><em>In situ.</em><small>Straight-on 3D reference · for install crew</small></div><div class="side">§04</div><div class="rule"></div></div><div class="atlas-3d"><div class="marks">STRUCTURAL 3D · <span>STRAIGHT-ON</span> · WIRING VISIBLE</div><img src="${snapURL}"/><div class="label">as it will stand.</div></div>` : "";
     const wordsGT = numToWords(r.grandTotal);
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${(project||"VR")} — Structural Report · ${meta.ref}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${(_project||"VR")} — Structural Report · ${_ref}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,300..700;9..144,1,300..500&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1769,7 +1978,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
 @media print{body{background:#fff;padding:0}.atlas-print{box-shadow:none;margin:0}}
 </style></head><body>
 <div class="atlas-print">
-  <div class="atlas-spine"><b>Structural Report</b> · Load · MCB · Safety · ${meta.ref}</div>
+  <div class="atlas-spine"><b>Structural Report</b> · Load · MCB · Safety · ${_ref}</div>
   <div class="atlas-page">
     <div class="atlas-super">
       <span>Structural &amp; Load Specification · Internal to fabricator</span>
@@ -1779,7 +1988,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
     </div>
     <div class="atlas-brand">
       <div class="name">Structural <em>Report</em></div>
-      <div class="ref">${meta.ref} · ${dateStr}</div>
+      <div class="ref">${_ref} · ${dateStr}</div>
     </div>
     <div class="atlas-title">
       <div class="kicker">Load · MCB · Safety Factor · ${r.product.series}</div>
@@ -1856,7 +2065,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
     </div>
 
     <div class="atlas-foot">
-      <div>${meta.ref} · Page 1 of 1</div>
+      <div>${_ref} · Page 1 of 1</div>
       <div class="brand">Visual Rhyme <em>Pvt. Ltd.</em><small>Powered by Microtronix Solutions</small></div>
       <div>Ahmedabad · 382481</div>
     </div>
@@ -1869,6 +2078,520 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
     w.document.open();
     w.document.write(html);
     w.document.close();
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════
+     THREE CLIENT-FACING DOCUMENT GENERATORS
+     — Each accepts an optional history record `h`. If given, regenerates
+       that quote's document. If not, uses the currently-active quote.
+     — All three open in a popup window, auto-print, and silently log
+       to the Office Quotes Sheet with their own `kind`.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  /* HANDOVER DOCUMENT — client-facing install completion certificate.
+     Client-friendly tone. Test checklist ticked. Training checklist ticked.
+     Warranty terms. Sign-off block. Feels celebratory. */
+  const exportHandover = async (h)=>{
+    const r = h ? recomputeQuote(h) : result;
+    if (!r) return;
+    const _ref = h?.ref || meta.ref;
+    const _date = h?.date || meta.date;
+    const _client = h?.client || client || "";
+    const _project = h?.project || project || "";
+    const _emp = h?.employee || employee || "";
+    postOfficeQuote("handover_pdf", {r, h});
+    const dateStr = new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"});
+    const brightNits = r.tech.brightnessNits || 0;
+    const areaSqft = r.areaSqft.toFixed(1);
+    const page = `
+      <div class="atlas-super">
+        <span>Visual Rhyme Pvt. Ltd. · Ahmedabad</span>
+        <span class="grow"></span>
+        <span class="atlas-office">OFFICE — INTERNAL</span>
+        <span class="atlas-stamp amber">HANDOVER</span>
+      </div>
+      <div class="atlas-brand">
+        <div class="name">Handover <em>Certificate</em></div>
+        <div class="ref">${_ref} · ${dateStr}</div>
+      </div>
+      <div class="atlas-title">
+        <div class="kicker">${r.product.series} · ${r.mode==="curved"?"Curved":"Flat"} · P${r.pitch}</div>
+        <h1>Delivered,<br/>installed &amp; <em>lit.</em></h1>
+        <div class="lede">Your ${r.product.series} P${r.pitch} wall — ${r.builtWft.toFixed(2)} by ${r.builtHft.toFixed(2)} feet, ${brightNits} nits at ${r.tech.refreshHz||"—"} Hz — has been commissioned and is ready for content.</div>
+      </div>
+      <div class="atlas-plate">
+        <div class="cell"><div class="k">Client</div><div class="v">${_client||"—"}<small>${_project||"Handover"}</small></div></div>
+        <div class="cell"><div class="k">Handed over</div><div class="v"><em>${dateStr}</em><small>by ${_emp||"Visual Rhyme"}</small></div></div>
+        <div class="cell"><div class="k">Ref</div><div class="v">${_ref}<small>keep for warranty claims</small></div></div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">i</div>
+        <div class="name">What we <em>delivered.</em><small>Product spec at a glance</small></div>
+        <div class="side">§01</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-duo">
+        <div>
+          <div class="col-h">The wall</div>
+          <dl class="atlas-dl">
+            <dt>Series</dt><dd>${r.product.series}</dd>
+            <dt>Type</dt><dd>${r.product.type}</dd>
+            <dt>Pitch</dt><dd class="hi">P${r.pitch}</dd>
+            <dt>Built size</dt><dd class="hi">${r.builtWft.toFixed(2)} × ${r.builtHft.toFixed(2)} ft</dd>
+            <dt>Active area</dt><dd>${areaSqft} sqft</dd>
+            <dt>Cabinets</dt><dd>${r.cabCountW} × ${r.cabCountH} = ${r.totalCabs}</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="col-h">Its picture</div>
+          <dl class="atlas-dl">
+            <dt>Pixel resolution</dt><dd class="hi">${r.pxW} × ${r.pxH}</dd>
+            <dt>Total pixels</dt><dd>${r.totalPixels.toLocaleString()}</dd>
+            <dt>Brightness</dt><dd>${brightNits} nits</dd>
+            <dt>Refresh</dt><dd>${r.tech.refreshHz||"—"} Hz</dd>
+            <dt>Ingress</dt><dd>${r.tech.ipRating||"—"}</dd>
+            <dt>Warranty</dt><dd class="good">${r.tech.warrantyYears||3} years</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">ii</div>
+        <div class="name">Our <em>sign-off.</em><small>Every test our install team ran before leaving</small></div>
+        <div class="side">§02</div>
+        <div class="rule"></div>
+      </div>
+      <ul class="atlas-check">
+        <li class="done"><b>Pixel test complete</b> — all cabinets tested, zero dead pixels reported</li>
+        <li class="done"><b>Colour calibration verified</b> — white point and gamma matched across all cabinets</li>
+        <li class="done"><b>Refresh sync locked</b> — controller output aligned with wall refresh rate</li>
+        <li class="done"><b>Signal path tested</b> — HDMI/SDI input verified with live content</li>
+        <li class="done"><b>All cabinets seated</b> — mechanical alignment and back-anchor torque checked</li>
+        <li class="done"><b>Power distribution safe</b> — MCB rated ${r.mcbRating}, earth continuity verified</li>
+        <li class="done"><b>Structural anchors torqued</b> — vertical supports at ${r.tubeSpec}</li>
+      </ul>
+
+      <div class="atlas-ch">
+        <div class="roman">iii</div>
+        <div class="name">Your <em>training.</em><small>What we walked your team through</small></div>
+        <div class="side">§03</div>
+        <div class="rule"></div>
+      </div>
+      <ul class="atlas-check">
+        <li class="done"><b>Power up / power down sequence</b></li>
+        <li class="done"><b>Signal input switching</b> — how to change source without dark frames</li>
+        <li class="done"><b>Basic content loading</b> — USB, network, and cloud sync methods</li>
+        <li class="done"><b>Brightness and colour presets</b> — day / night / event modes</li>
+        <li class="done"><b>Emergency shutdown</b> — hardware kill switch location</li>
+        <li class="done"><b>Warranty claim process</b> — when to WhatsApp, when to email</li>
+      </ul>
+
+      <div class="atlas-ch">
+        <div class="roman">iv</div>
+        <div class="name">Warranty &amp; <em>support.</em><small>Three years, straight talk</small></div>
+        <div class="side">§04</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-notes">
+        <b>Covered.</b> Manufacturing defects in cabinets, modules, controllers and power supplies for ${r.tech.warrantyYears||3} years from this handover date. Free replacement or repair of any faulty component within 72 working hours of a valid claim.
+        <span class="fine"><b>Not covered:</b> physical damage from impact, moisture ingress beyond ${r.tech.ipRating||"IP54"} rating, unauthorised modifications to firmware or wiring, damage from unstable power (install a proper AVR/UPS), fair-wear pixel drift after 60,000 hours use.</span>
+        <span class="fine"><b>Support:</b> WhatsApp +91 XXXXX-XXXXX or email support@visualrhyme.digital — reference this document's number (${_ref}) for fastest routing.</span>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">v</div>
+        <div class="name">Client <em>sign-off.</em><small>Your acknowledgement of receipt and training</small></div>
+        <div class="side">§05</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-sig">
+        <div>
+          <div class="k">Client name</div>
+          <div class="box"><span class="v">${_client||""}</span></div>
+          <div class="k">Signature &amp; date</div>
+          <div class="box"></div>
+        </div>
+        <div>
+          <div class="k">Visual Rhyme install lead</div>
+          <div class="box"><span class="v">${_emp||""}</span></div>
+          <div class="k">Signature &amp; date</div>
+          <div class="box"></div>
+        </div>
+      </div>
+
+      <div class="atlas-foot">
+        <div>${_ref} · Handover · Page 1 of 1</div>
+        <div class="brand">Visual Rhyme <em>Pvt. Ltd.</em><small>Powered by Microtronix Solutions</small></div>
+        <div>Ahmedabad · 382481</div>
+      </div>`;
+    const html = atlasPopup(`${_project||"VR"} — Handover · ${_ref}`, `<b>Handover</b> · ${_ref} · ${dateStr}`, page);
+    openPrintWindow(html);
+  };
+
+  /* SITE PREREQUISITES — pre-install checklist for the client's site.
+     Engineer-grade tone. Numbers from the engine. Client tickboxes at the end. */
+  const exportSitePrereq = async (h)=>{
+    const r = h ? recomputeQuote(h) : result;
+    if (!r) return;
+    const _ref = h?.ref || meta.ref;
+    const _client = h?.client || client || "";
+    const _project = h?.project || project || "";
+    postOfficeQuote("site_prereq_pdf", {r, h});
+    const dateStr = new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"});
+    // Approximate crated cabinet dimensions for freight-elevator sizing:
+    const crateW = Math.ceil((r.cab.w||640)+200);
+    const crateH = Math.ceil((r.cab.h||640)+200);
+    const clearanceMm = 500;
+    const spaceW = ((r.builtWmm + clearanceMm*2)/1000).toFixed(2);
+    const spaceH = ((r.builtHmm + clearanceMm)/1000).toFixed(2);
+    const singlePhaseOk = r.peakCurrentA <= 32;
+    const page = `
+      <div class="atlas-super">
+        <span>Visual Rhyme Pvt. Ltd. · Ahmedabad</span>
+        <span class="grow"></span>
+        <span class="atlas-office">OFFICE — INTERNAL</span>
+        <span class="atlas-stamp">PREREQUISITES</span>
+      </div>
+      <div class="atlas-brand">
+        <div class="name">Site <em>Prerequisites</em></div>
+        <div class="ref">${_ref} · ${dateStr}</div>
+      </div>
+      <div class="atlas-title">
+        <div class="kicker">Pre-install checklist · ${r.product.series}</div>
+        <h1>Before we <em>install.</em></h1>
+        <div class="lede">Everything that must be ready at your site before the Visual Rhyme install team arrives with the ${r.builtWft.toFixed(2)} × ${r.builtHft.toFixed(2)}ft wall. Precise numbers, no fluff.</div>
+      </div>
+      <div class="atlas-plate">
+        <div class="cell"><div class="k">Client</div><div class="v">${_client||"—"}<small>${_project||"Site prep"}</small></div></div>
+        <div class="cell"><div class="k">Wall</div><div class="v"><em>${r.builtWft.toFixed(2)} × ${r.builtHft.toFixed(2)}</em> ft<small>${r.totalCabs} cabinets · ${r.totalSystemKg} kg total</small></div></div>
+        <div class="cell"><div class="k">Ref</div><div class="v">${_ref}<small>Attach on all site queries</small></div></div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">i</div>
+        <div class="name">The <em>headlines.</em><small>The four numbers your electrician + structural engineer need</small></div>
+        <div class="side">§01</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-pillars">
+        <div class="atlas-pill hi"><div class="k">Peak draw</div><div class="v">${(r.peakPowerW/1000).toFixed(1)}<em> kW</em></div></div>
+        <div class="atlas-pill hi"><div class="k">MCB</div><div class="v" style="font-size:14pt">${r.mcbRating}</div></div>
+        <div class="atlas-pill warm"><div class="k">Total load</div><div class="v">${r.totalSystemKg}<em> kg</em></div></div>
+        <div class="atlas-pill warm"><div class="k">Load / point</div><div class="v">${r.loadPerSupportKg.toFixed(0)}<em> kg</em></div></div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">ii</div>
+        <div class="name">Physical <em>space.</em><small>Wall dimensions, clearance, floor loading</small></div>
+        <div class="side">§02</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-duo">
+        <div>
+          <div class="col-h">Space required</div>
+          <dl class="atlas-dl">
+            <dt>Wall face size</dt><dd class="hi">${r.builtWmm} × ${r.builtHmm} mm</dd>
+            <dt>Recommended room space</dt><dd>${spaceW} × ${spaceH} m</dd>
+            <dt>Clearance top / sides / bottom</dt><dd>${clearanceMm} mm min</dd>
+            <dt>Rear service access</dt><dd>600 mm min</dd>
+            <dt>Cabinet depth</dt><dd>${r.tech.cabinetDepthMm||"—"} mm</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="col-h">Structural loading</div>
+          <dl class="atlas-dl">
+            <dt>Total system weight</dt><dd class="hi">${r.totalSystemKg} kg</dd>
+            <dt>Vertical support count</dt><dd>${r.nVerticalSupports}</dd>
+            <dt>Load per support point</dt><dd class="hi">${r.loadPerSupportKg.toFixed(1)} kg</dd>
+            <dt>Tube spec supplied</dt><dd style="font-size:8.5pt">${r.tubeSpec}</dd>
+            <dt>Safety factor (rated ${r.tubeWorkingLoadKg} kg/pt)</dt><dd class="good">${r.safetyFactor.toFixed(1)}×</dd>
+          </dl>
+        </div>
+      </div>
+      <div class="atlas-notes">
+        <b>Wall anchor requirement.</b> Concrete: M12 chemical anchors, ≥100 mm embedment. Steel: M12 through-bolts with washers. Drywall alone is NOT acceptable — provide backing plate or route to structural stud.
+        <span class="fine">If your wall structure is unknown, request a site survey before install. Spans between vertical supports over 4 m require an uprated tube spec (50 mm × 3 mm) — flag this to us in advance.</span>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">iii</div>
+        <div class="name">Electrical <em>supply.</em><small>MCB, phase, earth — the electrician's brief</small></div>
+        <div class="side">§03</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-duo">
+        <div>
+          <div class="col-h">The supply</div>
+          <dl class="atlas-dl">
+            <dt>Peak draw (all-white worst case)</dt><dd class="hi">${(r.peakPowerW/1000).toFixed(2)} kW</dd>
+            <dt>Peak current @ 220 V</dt><dd>${r.peakCurrentA.toFixed(1)} A</dd>
+            <dt>MCB rating (dedicated circuit)</dt><dd class="hi">${r.mcbRating}</dd>
+            <dt>Phase</dt><dd class="hi">${singlePhaseOk?"Single-phase OK":"Three-phase required"}</dd>
+            <dt>Recommended supply</dt><dd>${r.recommendedSupplyKw} kW</dd>
+            <dt>AC input range</dt><dd>100–240 V · 50/60 Hz</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="col-h">The safety</div>
+          <dl class="atlas-dl">
+            <dt>Dedicated circuit required</dt><dd class="good">Yes</dd>
+            <dt>Earth continuity</dt><dd>&lt; 1 Ω</dd>
+            <dt>AVR / stabiliser</dt><dd>Recommended if grid variation &gt; ±10%</dd>
+            <dt>UPS backup</dt><dd>Optional (5-10 min for graceful shutdown)</dd>
+            <dt>Surge protection</dt><dd>Class II SPD recommended</dd>
+            <dt>Cable routing</dt><dd>Do NOT share conduit with signal cable</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">iv</div>
+        <div class="name">Environmental &amp; <em>access.</em><small>Where it can live, how it gets in</small></div>
+        <div class="side">§04</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-duo">
+        <div>
+          <div class="col-h">Environment</div>
+          <dl class="atlas-dl">
+            <dt>Operating temperature</dt><dd>${r.tech.opTempMin??"—"} to ${r.tech.opTempMax??"—"} °C</dd>
+            <dt>Relative humidity</dt><dd>10 – 90% (non-condensing)</dd>
+            <dt>Rear ventilation clearance</dt><dd>100 mm min (indoor)</dd>
+            <dt>Direct sunlight</dt><dd>${r.tech.ipRating&&r.tech.ipRating.startsWith("IP6")?"OK":"Not for this SKU"}</dd>
+            <dt>Ingress rating</dt><dd>${r.tech.ipRating||"—"}</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="col-h">Delivery access</div>
+          <dl class="atlas-dl">
+            <dt>Crated cabinet dimensions</dt><dd>${crateW} × ${crateH} × ${(r.tech.cabinetDepthMm||100)+150} mm</dd>
+            <dt>Minimum doorway width</dt><dd>${crateW+100} mm</dd>
+            <dt>Freight elevator</dt><dd>${crateW+100} × ${crateH+100} mm min</dd>
+            <dt>Corridor turning radius</dt><dd>1,500 mm min</dd>
+            <dt>Ground floor access</dt><dd>Preferred (avoids elevator entirely)</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">v</div>
+        <div class="name">Signal <em>source.</em><small>What plays into the wall</small></div>
+        <div class="side">§05</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-duo">
+        <div>
+          <div class="col-h">Player machine</div>
+          <dl class="atlas-dl">
+            <dt>OS</dt><dd>Windows 10 / 11 (64-bit)</dd>
+            <dt>CPU</dt><dd>Intel i5 10th gen or better</dd>
+            <dt>RAM</dt><dd>8 GB min · 16 GB recommended</dd>
+            <dt>GPU</dt><dd>${r.totalPixels > 2000000 ? "GTX 1060 6GB or better" : "Intel Iris Xe / GTX 1050"}</dd>
+            <dt>Storage</dt><dd>256 GB SSD (for content library)</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="col-h">Signal path</div>
+          <dl class="atlas-dl">
+            <dt>Controller ports required</dt><dd class="hi">${r.ports}</dd>
+            <dt>HDMI</dt><dd>2.0 (up to 4K60)</dd>
+            <dt>DVI-D dual-link</dt><dd>Alternative to HDMI</dd>
+            <dt>SDI 3G</dt><dd>For broadcast integration</dd>
+            <dt>Cable length</dt><dd>HDMI ≤ 5 m · else fiber/SDI</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">vi</div>
+        <div class="name">Your ready-state <em>checklist.</em><small>Tick these BEFORE we arrive on install day</small></div>
+        <div class="side">§06</div>
+        <div class="rule"></div>
+      </div>
+      <ul class="atlas-check">
+        <li><b>Wall space cleared and cleaned</b> — no fittings within the required footprint + clearance</li>
+        <li><b>Wall anchor points inspected</b> — structural engineer sign-off if load exceeds 500 kg / point</li>
+        <li><b>Dedicated electrical circuit installed</b> — ${r.mcbRating} MCB tested and labelled</li>
+        <li><b>Earth continuity verified</b> — &lt; 1 Ω from wall face to true earth</li>
+        <li><b>Signal source machine on site</b> — spec matches §05, tested, IP configured</li>
+        <li><b>Content ready or content brief agreed</b> — see the Content Creation Guide</li>
+        <li><b>Site walkthrough scheduled</b> — install lead and client rep together, 48 hrs before install</li>
+        <li><b>Delivery access confirmed</b> — doorways, elevator, and turning radius per §04</li>
+        <li><b>Storage bay identified for cabinets</b> — dry, level, off-floor for 24-48 hrs pre-mount</li>
+      </ul>
+
+      <div class="atlas-foot">
+        <div>${_ref} · Site Prerequisites · Page 1 of 1</div>
+        <div class="brand">Visual Rhyme <em>Pvt. Ltd.</em><small>Powered by Microtronix Solutions</small></div>
+        <div>Ahmedabad · 382481</div>
+      </div>`;
+    const html = atlasPopup(`${_project||"VR"} — Site Prerequisites · ${_ref}`, `<b>Site Prerequisites</b> · ${_ref} · ${dateStr}`, page);
+    openPrintWindow(html);
+  };
+
+  /* CONTENT CREATION GUIDE — client-friendly educational doc.
+     Explains how to make or order content that plays well on THIS wall. */
+  const exportContentGuide = async (h)=>{
+    const r = h ? recomputeQuote(h) : result;
+    if (!r) return;
+    const _ref = h?.ref || meta.ref;
+    const _client = h?.client || client || "";
+    const _project = h?.project || project || "";
+    postOfficeQuote("content_guide_pdf", {r, h});
+    const dateStr = new Date().toLocaleDateString("en-IN",{day:"numeric",month:"long",year:"numeric"});
+    // Bitrate rule of thumb: ~2 Mbps per megapixel × 30 fps
+    const megapixels = r.totalPixels / 1000000;
+    const recBitrateMbps = Math.max(20, Math.ceil(megapixels * 12));
+    // Min readable text height at wall's viewing distance
+    // rule: text height in metres ≈ viewing distance / 200 (for comfortable body copy)
+    const vd = r.minViewingDistanceM;
+    const minTextHeightM = vd / 200;
+    const minTextHeightPx = Math.max(24, Math.round(minTextHeightM * 1000 / r.pitch));
+    const page = `
+      <div class="atlas-super">
+        <span>Visual Rhyme Pvt. Ltd. · Ahmedabad</span>
+        <span class="grow"></span>
+        <span class="atlas-office">OFFICE — INTERNAL</span>
+        <span class="atlas-stamp amber">CONTENT GUIDE</span>
+      </div>
+      <div class="atlas-brand">
+        <div class="name">Content <em>Creation Guide</em></div>
+        <div class="ref">${_ref} · ${dateStr}</div>
+      </div>
+      <div class="atlas-title">
+        <div class="kicker">${r.pxW} × ${r.pxH} · ${r.aspectRatio} · ${r.tech.refreshHz||"—"} Hz</div>
+        <h1>Content,<br/><em>well made.</em></h1>
+        <div class="lede">Everything a designer, editor or DoP needs to know to make content that sings on your ${r.builtWft.toFixed(1)}×${r.builtHft.toFixed(1)}ft wall. Numbers pulled from the actual configuration you bought.</div>
+      </div>
+      <div class="atlas-plate">
+        <div class="cell"><div class="k">Client</div><div class="v">${_client||"—"}<small>${_project||"Content brief"}</small></div></div>
+        <div class="cell"><div class="k">Resolution</div><div class="v"><em>${r.pxW} × ${r.pxH}</em><small>${r.totalPixels.toLocaleString()} pixels total</small></div></div>
+        <div class="cell"><div class="k">Aspect</div><div class="v">${r.aspectRatio}<small>${r.builtWft.toFixed(1)} × ${r.builtHft.toFixed(1)} ft physical</small></div></div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">i</div>
+        <div class="name">Your screen, at a <em>glance.</em><small>The numbers your editor needs before opening After Effects</small></div>
+        <div class="side">§01</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-pillars">
+        <div class="atlas-pill hi"><div class="k">Pixels</div><div class="v" style="font-size:14pt">${r.pxW}×${r.pxH}</div></div>
+        <div class="atlas-pill hi"><div class="k">Aspect</div><div class="v">${r.aspectRatio}</div></div>
+        <div class="atlas-pill warm"><div class="k">Refresh</div><div class="v">${r.tech.refreshHz||"—"}<em> Hz</em></div></div>
+        <div class="atlas-pill warm"><div class="k">Brightness</div><div class="v">${r.tech.brightnessNits||"—"}<em> nits</em></div></div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">ii</div>
+        <div class="name">Recommended <em>content specs.</em><small>Deliver in these formats for perfect playback</small></div>
+        <div class="side">§02</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-duo">
+        <div>
+          <div class="col-h">Video</div>
+          <dl class="atlas-dl">
+            <dt>Codec</dt><dd class="hi">H.264 (or H.265 for smaller)</dd>
+            <dt>Container</dt><dd>MP4</dd>
+            <dt>Resolution</dt><dd class="hi">${r.pxW} × ${r.pxH}</dd>
+            <dt>Frame rate</dt><dd>Match wall: ${r.tech.refreshHz===7680?"60":"30"} fps</dd>
+            <dt>Bitrate</dt><dd class="hi">≥ ${recBitrateMbps} Mbps</dd>
+            <dt>Colour space</dt><dd>sRGB (default)</dd>
+            <dt>Audio</dt><dd>AAC 128 kbps if any</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="col-h">Image / still</div>
+          <dl class="atlas-dl">
+            <dt>Format</dt><dd class="hi">PNG (lossless) or JPG</dd>
+            <dt>Resolution</dt><dd class="hi">Exact ${r.pxW} × ${r.pxH}</dd>
+            <dt>Bit depth</dt><dd>${r.tech.bitDepth||8}-bit</dd>
+            <dt>Colour profile</dt><dd>sRGB — no embedded ICC</dd>
+            <dt>JPG quality</dt><dd>≥ 90 (avoid visible artefacts)</dd>
+            <dt>DPI</dt><dd>Not relevant — pixel-exact</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">iii</div>
+        <div class="name">The <em>Do's.</em><small>Habits that make LED content sing</small></div>
+        <div class="side">§03</div>
+        <div class="rule"></div>
+      </div>
+      <ul class="atlas-check">
+        <li class="done"><b>Design at exact resolution</b> (${r.pxW}×${r.pxH}) — no upscaling, no downsampling</li>
+        <li class="done"><b>Test in a dim room first</b> — LED is bright; overlit rooms lie to you</li>
+        <li class="done"><b>Use saturated, vivid colour</b> — LED shows depth other displays can't</li>
+        <li class="done"><b>Loop main content 2 – 5 min</b> — long enough to feel considered, short enough to stay fresh</li>
+        <li class="done"><b>Minimum text height ${minTextHeightPx} px</b> — readable from ${vd.toFixed(1)}m viewing distance</li>
+        <li class="done"><b>Motion blur is your friend</b> — sharp movement can strobe at ${r.tech.refreshHz||3840}Hz refresh</li>
+        <li class="done"><b>Deliver a 30 sec test loop first</b> — verify colour + calibration before the big drop</li>
+      </ul>
+
+      <div class="atlas-ch">
+        <div class="roman">iv</div>
+        <div class="name">The <em>Don'ts.</em><small>Sins the wall will punish you for</small></div>
+        <div class="side">§04</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-notes">
+        <b>Avoid:</b> extended pure-white or full-red frames (heat build-up, colour drift). Fine checkerboards or single-pixel patterns (moiré). Text under ${minTextHeightPx} px (unreadable at ${vd.toFixed(1)}m). Compressed content with visible macroblocks. Static logos held for hours (minor risk of persistence on cheap displays — negligible on ${r.product.series} but still avoid).
+        <span class="fine"><b>Colour management:</b> deliver in sRGB unless your team is calibrated for Rec.2020. Do not embed ICC profiles — they can misinterpret and shift hue. Do not use camera-raw LUTs on final delivery.</span>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">v</div>
+        <div class="name">How to <em>deliver.</em><small>File naming, transport, backup</small></div>
+        <div class="side">§05</div>
+        <div class="rule"></div>
+      </div>
+      <div class="atlas-duo">
+        <div>
+          <div class="col-h">Transport methods</div>
+          <dl class="atlas-dl">
+            <dt>USB 3.0 stick</dt><dd>Preferred — fastest</dd>
+            <dt>Google Drive / Dropbox</dt><dd>OK for &lt; 5 GB</dd>
+            <dt>Network share</dt><dd>If on same LAN</dd>
+            <dt>WeTransfer Pro</dt><dd>Up to 200 GB</dd>
+          </dl>
+        </div>
+        <div>
+          <div class="col-h">Naming convention</div>
+          <dl class="atlas-dl">
+            <dt>Format</dt><dd style="font-size:8.5pt">CLIENT_YYYYMMDD_seq.mp4</dd>
+            <dt>Example</dt><dd style="font-size:8.5pt">${(_client||"CLIENT").split(' ')[0].toUpperCase()}_20260117_001.mp4</dd>
+            <dt>Test loop suffix</dt><dd>_TEST.mp4</dd>
+            <dt>Master vs proxy</dt><dd>Use _MASTER / _PROXY</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="atlas-ch">
+        <div class="roman">vi</div>
+        <div class="name">Content acceptance <em>checklist.</em><small>Tick these before you sign off on any drop</small></div>
+        <div class="side">§06</div>
+        <div class="rule"></div>
+      </div>
+      <ul class="atlas-check">
+        <li><b>Correct resolution ${r.pxW}×${r.pxH}</b> — verified in file properties</li>
+        <li><b>Correct duration and loop point</b> — no black frame at loop junction</li>
+        <li><b>Colours tested in dim room</b> — no unexpected shifts vs source</li>
+        <li><b>Text readable from ${vd.toFixed(1)}m</b> — walked back and checked</li>
+        <li><b>Audio (if any) at −18 dBFS peak</b> — no clipping on wall speakers</li>
+        <li><b>No copyright issues</b> — music, footage, fonts all licensed</li>
+        <li><b>Backup copy stored</b> — USB + cloud, in case the master fails</li>
+      </ul>
+
+      <div class="atlas-foot">
+        <div>${_ref} · Content Guide · Page 1 of 1</div>
+        <div class="brand">Visual Rhyme <em>Pvt. Ltd.</em><small>Powered by Microtronix Solutions</small></div>
+        <div>Ahmedabad · 382481</div>
+      </div>`;
+    const html = atlasPopup(`${_project||"VR"} — Content Guide · ${_ref}`, `<b>Content Guide</b> · ${_ref} · ${dateStr}`, page);
+    openPrintWindow(html);
   };
 
   const openQuote = (h)=>{
@@ -1948,9 +2671,40 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
           <input value={client} onChange={e=>setClient(e.target.value)} placeholder="Client (optional)"
             style={{background:C.navyLight,border:`1px solid ${C.line}`,color:C.cream,padding:"9px 12px",fontFamily:MN,fontSize:13,borderRadius:8,outline:"none",width:150}}/>
           {compareSet.length>0 && <button onClick={()=>setCompareOpen(true)} style={headerBtn(false)}>⊞ Compare ({compareSet.length})</button>}
-          <button onClick={()=>setHistoryOpen(true)} style={headerBtn(false)}>🕘 History{history.length?` (${history.length})`:""}</button>
-          <button onClick={exportStructural} disabled={!valid} title="Fabricator/electrician PDF — load, MCB, safety factor, 3D reference (straight-on)" style={{...headerBtn(false),background:"transparent",borderColor:C.line,color:C.lavender,opacity:valid?1:.5}}>📐 Structural PDF</button>
-          <button onClick={doExportPdf} disabled={!valid} style={{...headerBtn(false),background:C.purple,borderColor:exportFlash?C.amber:C.purple,color:C.cream,opacity:valid?1:.5,boxShadow:exportFlash?`0 0 0 3px ${C.amber}, 0 0 22px ${C.amber}`:"none",transition:"box-shadow .3s, border-color .3s"}}>⤓ Export PDF</button>
+          <button onClick={()=>setHistoryOpen(true)} style={headerBtn(false)}>👤 Profile{history.length?` (${history.length})`:""}</button>
+          {/* Documents ▾ dropdown — one purple button, 5 doc types beneath.
+              Menu closes on outside click via docsMenuOpen useEffect above. */}
+          <div style={{position:"relative"}}>
+            <button
+              onClick={(e)=>{ e.stopPropagation(); setDocsMenuOpen(!docsMenuOpen); }}
+              disabled={!valid}
+              style={{...headerBtn(false),background:C.purple,borderColor:exportFlash?C.amber:C.purple,color:C.cream,opacity:valid?1:.5,boxShadow:exportFlash?`0 0 0 3px ${C.amber}, 0 0 22px ${C.amber}`:"none",transition:"box-shadow .3s, border-color .3s",display:"flex",alignItems:"center",gap:6}}
+              title="Generate any of 5 documents for the current quote">
+              ⤓ Documents <span style={{fontSize:9,opacity:.85}}>▾</span>
+            </button>
+            {docsMenuOpen && (
+              <div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 8px)",right:0,minWidth:280,background:C.navyLight,border:`1px solid ${C.line}`,borderRadius:12,padding:6,boxShadow:"0 20px 60px rgba(0,0,0,.55)",zIndex:200}}>
+                {[
+                  { icon:"⤓", label:"Quote PDF",        sub:"The full sales quote — Atlas layout", accent:C.magenta, run: doExportPdf },
+                  { icon:"📐", label:"Structural PDF",  sub:"Fabricator/electrician — load · MCB · SF", accent:C.magenta, run: exportStructural },
+                  { icon:"🎯", label:"Handover Document",  sub:"Client-facing install completion certificate", accent:C.amber, run: ()=>exportHandover() },
+                  { icon:"📋", label:"Site Prerequisites", sub:"Engineer-grade pre-install checklist", accent:C.amber, run: ()=>exportSitePrereq() },
+                  { icon:"🎬", label:"Content Guide",   sub:"How to make content for THIS wall", accent:C.amber, run: ()=>exportContentGuide() },
+                ].map(item=>(
+                  <button key={item.label} onClick={()=>{ setDocsMenuOpen(false); item.run(); }}
+                    style={{display:"flex",alignItems:"flex-start",gap:12,width:"100%",padding:"10px 12px",background:"transparent",border:"none",color:C.cream,cursor:"pointer",borderRadius:8,textAlign:"left",fontFamily:MN,transition:"background .15s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background=`${item.accent}15`}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <span style={{fontSize:16,marginTop:1,color:item.accent}}>{item.icon}</span>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:700,letterSpacing:.3}}>{item.label}</div>
+                      <div style={{fontSize:10,color:C.lavender,opacity:.7,marginTop:1}}>{item.sub}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2191,7 +2945,15 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
       </div>
 
       <Assistant api={assistantApi}/>
-      {historyOpen && <HistoryPanel history={history} onOpen={openQuote} onDelete={deleteQuote} onClose={()=>setHistoryOpen(false)}/>}
+      {historyOpen && <HistoryPanel history={history} employee={employee}
+        onOpen={openQuote} onDelete={deleteQuote}
+        onGenerate={(kind, h)=>{
+          if (kind==="structural") exportStructural(h);
+          else if (kind==="handover") exportHandover(h);
+          else if (kind==="site_prereq") exportSitePrereq(h);
+          else if (kind==="content_guide") exportContentGuide(h);
+        }}
+        onClose={()=>setHistoryOpen(false)}/>}
       {compareOpen && <ComparePanel items={compareSet} db={db} onLoad={(cfg)=>{openQuote(cfg);setCompareOpen(false);}} onRemove={removeCompare} onClear={()=>saveCompare([])} onClose={()=>setCompareOpen(false)}/>}
     </div>
     <PrintSheet r={result} meta={meta} threeDSnapshot={threeDSnapshot}/>
