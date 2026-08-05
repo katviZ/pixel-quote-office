@@ -1058,7 +1058,7 @@ function PrintSheet({r,meta,preview,threeDSnapshot}){
           <div className="strap">
             <span>Validity · <b>7 days</b></span>
             <span>Payment · <b>60 / 30 / 10</b></span>
-            <span>Warranty · <b>3 years</b></span>
+            <span>Warranty · <b>{(r.tech && r.tech.warrantyYears) || 2} years</b></span>
           </div>
         </div>
 
@@ -2154,7 +2154,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
             <dt>Brightness</dt><dd>${brightNits} nits</dd>
             <dt>Refresh</dt><dd>${r.tech.refreshHz||"—"} Hz</dd>
             <dt>Ingress</dt><dd>${r.tech.ipRating||"—"}</dd>
-            <dt>Warranty</dt><dd class="good">${r.tech.warrantyYears||3} years</dd>
+            <dt>Warranty</dt><dd class="good">${r.tech.warrantyYears||2} years</dd>
           </dl>
         </div>
       </div>
@@ -2197,7 +2197,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
         <div class="rule"></div>
       </div>
       <div class="atlas-notes">
-        <b>Covered.</b> Manufacturing defects in cabinets, modules, controllers and power supplies for ${r.tech.warrantyYears||3} years from this handover date. Free replacement or repair of any faulty component within 72 working hours of a valid claim.
+        <b>Covered.</b> Manufacturing defects in cabinets, modules, controllers and power supplies for ${r.tech.warrantyYears||2} years from this handover date. Free replacement or repair of any faulty component within 72 working hours of a valid claim.
         <span class="fine"><b>Not covered:</b> physical damage from impact, moisture ingress beyond ${r.tech.ipRating||"IP54"} rating, unauthorised modifications to firmware or wiring, damage from unstable power (install a proper AVR/UPS), fair-wear pixel drift after 60,000 hours use.</span>
         <span class="fine"><b>Support:</b> WhatsApp +91 XXXXX-XXXXX or email support@visualrhyme.digital — reference this document's number (${_ref}) for fastest routing.</span>
       </div>
