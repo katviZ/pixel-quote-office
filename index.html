@@ -1774,8 +1774,30 @@ function App(){
 
   /* Open a new browser window and stream Atlas-styled HTML into it, then
      auto-fire window.print() so the browser's Save-as-PDF dialog opens
-     inside the popup. Shared by every document generator. */
+     inside the popup. Shared by every document generator.
+
+     Mobile branch: iPhone/Android browsers (especially iOS Safari when the
+     PQM is installed to the home screen in "standalone" display-mode)
+     refuse to let window.open("","_blank") + document.write cross the
+     process boundary — the popup opens blank and the PWA appears to
+     close. Fix: stream the HTML through a Blob URL that the mobile
+     browser can navigate to directly; the auto-print script inside the
+     HTML still fires on load, so the native Save-PDF sheet opens. */
   const openPrintWindow = (html)=>{
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent||"");
+    if (isMobile) {
+      try {
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const url  = URL.createObjectURL(blob);
+        const w = window.open(url, "_blank");
+        if (!w || w.closed) { window.location.href = url; }
+        setTimeout(()=>URL.revokeObjectURL(url), 60000);
+        return true;
+      } catch (e) {
+        alert("Couldn't open the document on this device. Try opening the PQM in your mobile browser (not from the home-screen icon).");
+        return false;
+      }
+    }
     const w = window.open("", "_blank");
     if (!w) { alert("Please allow popups for Pixel Quote Max so the document can open."); return false; }
     w.document.open(); w.document.write(html); w.document.close();
@@ -2165,11 +2187,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
 </div>
 <script>window.addEventListener("load",function(){setTimeout(function(){window.print();},350);});<\/script>
 </body></html>`;
-    const w = window.open("", "_blank");
-    if (!w) { alert("Please allow popups for Pixel Quote Max so the Structural PDF can open."); return; }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+    openPrintWindow(html);
   };
 
   /* ═══════════════════════════════════════════════════════════════════
