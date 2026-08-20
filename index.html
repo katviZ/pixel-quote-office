@@ -948,6 +948,69 @@ function themeHouseCSS(dealer){
     `:root{ --p:${s.base}; --v:${s.deep}; --deep:${s.darkest}; --ink:#1c1622; --grey:#5a5566; --line:${s.line}; --bg:${s.bg}; --soft:${s.soft}; --green:#0d9152; --greenbg:#e8f6ee; --amber:#b8791a; --amberbg:#fbf1df; }`);
 }
 
+/* html2pdf.js integration — direct-download PDF generator.
+ * Loaded lazily on first call so it doesn't slow the initial load.
+ * Renders the same HTML we'd otherwise open in a popup, wraps it as a
+ * PDF blob, and triggers a browser download with a friendly filename.
+ * Works on desktop AND mobile (including iOS PWA in standalone mode
+ * where popups are broken). Falls back to popup on failure. */
+let _html2pdfPromise = null;
+function loadHtml2Pdf() {
+  if (_html2pdfPromise) return _html2pdfPromise;
+  _html2pdfPromise = new Promise((resolve, reject) => {
+    if (window.html2pdf) return resolve(window.html2pdf);
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload = () => resolve(window.html2pdf);
+    s.onerror = () => { _html2pdfPromise = null; reject(new Error("html2pdf load failed")); };
+    document.head.appendChild(s);
+  });
+  return _html2pdfPromise;
+}
+
+/* Render a full-document HTML string to PDF and trigger download.
+ * `html` is a complete <!DOCTYPE html>... document; we parse it and
+ * transplant the <style> tags + <body> into an off-screen container
+ * so html2canvas can see it with the right CSS applied.
+ * Returns true on success, false if html2pdf failed (caller should fall
+ * back to popup). */
+async function downloadHtmlAsPdf(html, filename) {
+  try {
+    await loadHtml2Pdf();
+    if (!window.html2pdf) return false;
+    // Parse doc, transplant styles + body into an off-screen node
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    if (!filename) {
+      const t = parsed.querySelector("title");
+      filename = (t && t.textContent.trim().replace(/[\/:*?"<>|]+/g, "_").slice(0, 120)) || "document";
+      if (!/\.pdf$/i.test(filename)) filename += ".pdf";
+    }
+    const container = document.createElement("div");
+    container.style.cssText = "position:fixed;left:-99999px;top:0;background:#fff;width:210mm;";
+    parsed.head.querySelectorAll("style").forEach(el => container.appendChild(el.cloneNode(true)));
+    Array.from(parsed.body.childNodes).forEach(node => container.appendChild(node.cloneNode(true)));
+    document.body.appendChild(container);
+    try {
+      await window.html2pdf().set({
+        margin: 0,
+        filename: filename,
+        image: { type: "jpeg", quality: 0.96 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true, backgroundColor: "#ffffff", logging: false },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
+        pagebreak: { mode: ["css", "legacy"] }
+      }).from(container).save();
+      return true;
+    } finally {
+      document.body.removeChild(container);
+    }
+  } catch (e) {
+    console.warn("html2pdf failed, falling back to popup:", e);
+    return false;
+  }
+}
+
+
 function PrintSheet({r,meta,preview,threeDSnapshot}){
   if(!r) return null;
   const cv=r.curve;
@@ -1783,7 +1846,14 @@ function App(){
      close. Fix: stream the HTML through a Blob URL that the mobile
      browser can navigate to directly; the auto-print script inside the
      HTML still fires on load, so the native Save-PDF sheet opens. */
-  const openPrintWindow = (html)=>{
+  const openPrintWindow = async (html, filename)=>{
+    // Preferred path: generate a real PDF and trigger a direct download.
+    // Works on desktop AND mobile PWA-standalone (no popup, no navigation).
+    const ok = await downloadHtmlAsPdf(html, filename);
+    if (ok) return true;
+
+    // Fallback path (html2pdf failed to load, or crashed) — use the
+    // previous popup / mobile-blob flow.
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent||"");
     if (isMobile) {
       try {
