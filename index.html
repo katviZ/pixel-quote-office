@@ -2689,7 +2689,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
           <div class="col-h">Naming convention</div>
           <dl class="atlas-dl">
             <dt>Format</dt><dd style="font-size:8.5pt">CLIENT_YYYYMMDD_seq.mp4</dd>
-            <dt>Example</dt><dd style="font-size:8.5pt">${(_client||"CLIENT").split(' ')[0].toUpperCase()}_20260117_001.mp4</dd>
+            <dt>Example</dt><dd style="font-size:8.5pt">${esc((_client||"CLIENT").split(' ')[0].toUpperCase())}_20260117_001.mp4</dd>
             <dt>Test loop suffix</dt><dd>_TEST.mp4</dd>
             <dt>Master vs proxy</dt><dd>Use _MASTER / _PROXY</dd>
           </dl>
