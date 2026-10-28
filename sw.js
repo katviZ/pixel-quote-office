@@ -1,13 +1,18 @@
 /* PQM-Office service worker — precache the shell so the app opens
    offline after first install. Bump CACHE_VERSION whenever engine.js
    or index.html changes materially so users get the update on next open. */
-const CACHE_VERSION = "pqmo-v17"; // bump on every engine.js / index.html change
+const CACHE_VERSION = "pqmo-v18"; // bump on every engine.js / index.html change
 const SHELL = [
   "./",
   "./index.html",
   "./engine.js",
   "./pixel-data.xml",
   "./manifest.json",
+  "./vendor/react.production.min.js",
+  "./vendor/react-dom.production.min.js",
+  "./vendor/babel.min.js",
+  "./vendor/three.min.js",
+  "./vendor/OrbitControls.js",
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png",

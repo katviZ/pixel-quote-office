@@ -1,7 +1,7 @@
 # Pixel Quote Max
 
 One calculator for **flat *and* curved** LED jobs — full engineering + instant costing, with a
-print-ready PDF quote. Built for Visual Rhyme Pvt. Ltd. by merging Pixel Quote Pro (flat sales)
+print-ready PDF quote. Built for Visual Rhyme by merging Pixel Quote Pro (flat sales)
 and the Curved LED Calculator (curved engineering) into a single deployable tool.
 
 ## Files

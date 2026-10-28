@@ -97,9 +97,9 @@
 <!-- CDN versions PINNED — never use unpinned URLs on a deployed site.
      Babel 8 broke the in-browser <script type="text/babel"> transform pattern;
      locking to v7 keeps the JSX transform working as designed. -->
-<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+<script src="vendor/react.production.min.js"></script>
+<script src="vendor/react-dom.production.min.js"></script>
+<script src="vendor/babel.min.js"></script>
 <script src="engine.js"></script>
 
 <script type="text/babel" data-presets="react">
@@ -285,7 +285,7 @@ function SectionDrawing({sag,curveType}){
 }
 
 /* ───────── 3D stage (Phase 2 — Three.js, lazy-loaded) ─────────
-   Loads three@0.149.0 from unpkg on first mount (UMD globals, no ESM
+   Loads vendored three.js 0.147.0 UMD from vendor/ on first mount (no ESM
    gymnastics — Babel-standalone can't import ESM cleanly). Caches the
    load state on window so re-mount is instant. Curve geometry uses the
    chord-radius approach: each cabinet is a flat chord of width cabW
@@ -298,10 +298,10 @@ function loadThree(){
   if (__threeLoadPromise) return __threeLoadPromise;
   __threeLoadPromise = new Promise((resolve, reject) => {
     const s1 = document.createElement("script");
-    s1.src = `https://unpkg.com/three@${THREE_VER}/build/three.min.js`;
+    s1.src = "vendor/three.min.js"; // vendored (was unpkg three@THREE_VER)
     s1.onload = () => {
       const s2 = document.createElement("script");
-      s2.src = `https://unpkg.com/three@${THREE_VER}/examples/js/controls/OrbitControls.js`;
+      s2.src = "vendor/OrbitControls.js"; // vendored (was unpkg three@THREE_VER examples)
       s2.onload = () => resolve();
       s2.onerror = () => reject(new Error("OrbitControls failed to load"));
       document.head.appendChild(s2);
@@ -1174,6 +1174,7 @@ function PrintSheet({r,meta,preview,threeDSnapshot}){
 // Paste your Google Apps Script Web App URL here to send leads to your Sheet.
 // Leave "" and leads still save to the browser (localStorage "pqm_leads") as backup.
 const SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbztZ4cfIfkJnBxhgqvlWZ0mxyXjMFNrAEFVDD3cAdxcomEP3ecvxP0oP47lbZCo7Tei8g/exec";
+const SHEET_KEY = "cf9361e28a78b77696db1547d35e5beb"; // shared write token — doPost drops bodies without it (anti drive-by)
 
 const KB = {
   root: { bot: "Hi! I'm the Visual Rhyme assistant 👋 I can help you size and price an LED screen. What do you need?",
@@ -1280,7 +1281,7 @@ function Assistant({ api }){
   const saveLead = (rec)=>{
     try{ const k="pqm_leads"; const arr=JSON.parse(localStorage.getItem(k)||"[]"); arr.push(rec); localStorage.setItem(k,JSON.stringify(arr)); }catch{}
     if(SHEET_ENDPOINT){
-      try{ fetch(SHEET_ENDPOINT,{ method:"POST", mode:"no-cors", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body:JSON.stringify(rec) }); }catch{}
+      try{ fetch(SHEET_ENDPOINT,{ method:"POST", mode:"no-cors", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body:JSON.stringify({ ...rec, k: SHEET_KEY }) }); }catch{}
     }
   };
 
@@ -1324,6 +1325,11 @@ function Assistant({ api }){
 /* ───────── main app ───────── */
 const Q = (typeof location!=="undefined") ? new URLSearchParams(location.search) : new URLSearchParams();
 const qDef = (k,d)=> Q.get(k)!==null ? Q.get(k) : d;
+/* Security: URL params that seed free-text state are whitelisted + capped (reflected-XSS guard). */
+const sanitizeParam = (s)=> String(s??"").replace(/[^\w .,&()\-]/g,"").slice(0,80);
+const qClean = (k,d)=> { const v = Q.get(k); return v!==null ? sanitizeParam(v) : d; };
+/* HTML-entity escape for every user-influenced string interpolated into popup/print HTML. */
+const esc = (s)=> String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
 
 /* remembered session (last-used inputs) + policy acceptance */
 const POLICY_VERSION = "office-1"; // key changes vs public PQM — office users don't share the flag
@@ -1333,10 +1339,11 @@ const sDef = (k,d)=> SAVED[k]!==undefined ? SAVED[k] : d;
 
 /* ───────── usage-policy gate (must accept to enter) ───────── */
 /* PQM-Office passphrase gate.
-   SHA-256 of "VisualRhyme@AMD" — client-side check only. Not real security
-   (bypassable if you can read the source). Purpose: prevent the wrong URL
-   in the wrong hands from casually revealing Kathan's internal cost inputs. */
-const PQMO_HASH = "874bc830502254c5503da4563cf8356fd64dfe2a136631e942f9f79f19b4938d";
+   SHA-256 hash of the office passphrase — client-side check only. Not real
+   security (bypassable if you can read the source). Purpose: prevent the
+   wrong URL in the wrong hands from casually revealing Kathan's internal
+   cost inputs. Plaintext lives with Kathan only — never in this repo. */
+const PQMO_HASH = "99e61fd134cb0939169ee8295d1f405ed8262fb3635a180068e184be40078f82";
 async function sha256Hex(s){
   const buf = new TextEncoder().encode(s);
   const hash = await crypto.subtle.digest("SHA-256", buf);
@@ -1571,8 +1578,8 @@ function App(){
   const [curveType,setCurveType]=useState(qDef("ct",sDef("curveType","outer")));
   const [cabWeightKg,setCabWeightKg]=useState(parseFloat(qDef("cw",sDef("cabWeightKg",14)))||14);
   const [stageTab,setStageTab]=useState("elevation");
-  const [project,setProject]=useState(qDef("proj",sDef("project","")));
-  const [client,setClient]=useState(qDef("cl",sDef("client","")));
+  const [project,setProject]=useState(qClean("proj",sDef("project","")));
+  const [client,setClient]=useState(qClean("cl",sDef("client","")));
   const [exportFlash,setExportFlash]=useState(false);
   // Phase 3: 3D canvas snapshot captured at PDF-export time, drawn into PrintSheet.
   // Null when the user hasn't opened the 3D tab yet (snapshot skipped gracefully).
@@ -1927,6 +1934,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
       const rOrientation = h ? (h.orientation||"native") : orientation;
       const rMode = h ? h.mode : mode;
       const payload = {
+        k: SHEET_KEY,
         mode: "office",
         kind, // quote_pdf | structural_pdf | handover_pdf | site_prereq_pdf | content_guide_pdf
         employee: h?.employee || employee,
@@ -2024,7 +2032,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
     }).join("");
     const snapImg = snapURL ? `<div class="atlas-ch"><div class="roman">iv</div><div class="name"><em>In situ.</em><small>Straight-on 3D reference · for install crew</small></div><div class="side">§04</div><div class="rule"></div></div><div class="atlas-3d"><div class="marks">STRUCTURAL 3D · <span>STRAIGHT-ON</span> · WIRING VISIBLE</div><img src="${snapURL}"/><div class="label">as it will stand.</div></div>` : "";
     const wordsGT = numToWords(r.grandTotal);
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${(_project||"VR")} — Structural Report · ${_ref}</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${esc(_project||"VR")} — Structural Report · ${_ref}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,300..700;9..144,1,300..500&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2239,8 +2247,8 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
         <div class="lede">Your ${r.product.series} P${r.pitch} wall — ${r.builtWft.toFixed(2)} by ${r.builtHft.toFixed(2)} feet, ${brightNits} nits at ${r.tech.refreshHz||"—"} Hz — has been commissioned and is ready for content.</div>
       </div>
       <div class="atlas-plate">
-        <div class="cell"><div class="k">Client</div><div class="v">${_client||"—"}<small>${_project||"Handover"}</small></div></div>
-        <div class="cell"><div class="k">Handed over</div><div class="v"><em>${dateStr}</em><small>by ${_emp||"Visual Rhyme"}</small></div></div>
+        <div class="cell"><div class="k">Client</div><div class="v">${esc(_client)||"—"}<small>${esc(_project)||"Handover"}</small></div></div>
+        <div class="cell"><div class="k">Handed over</div><div class="v"><em>${dateStr}</em><small>by ${esc(_emp)||"Visual Rhyme"}</small></div></div>
         <div class="cell"><div class="k">Ref</div><div class="v">${_ref}<small>keep for warranty claims</small></div></div>
       </div>
 
@@ -2327,13 +2335,13 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
       <div class="atlas-sig">
         <div>
           <div class="k">Client name</div>
-          <div class="box"><span class="v">${_client||""}</span></div>
+          <div class="box"><span class="v">${esc(_client)||""}</span></div>
           <div class="k">Signature &amp; date</div>
           <div class="box"></div>
         </div>
         <div>
           <div class="k">Visual Rhyme install lead</div>
-          <div class="box"><span class="v">${_emp||""}</span></div>
+          <div class="box"><span class="v">${esc(_emp)||""}</span></div>
           <div class="k">Signature &amp; date</div>
           <div class="box"></div>
         </div>
@@ -2344,7 +2352,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
         <div class="brand">Visual Rhyme<small>Powered by Microtronix Solutions · GSTIN 24AAWFM3775A1Z4</small></div>
         <div>Ahmedabad · 382481</div>
       </div>`;
-    const html = atlasPopup(`${_project||"VR"} — Handover · ${_ref}`, `<b>Handover</b> · ${_ref} · ${dateStr}`, page);
+    const html = atlasPopup(`${esc(_project)||"VR"} — Handover · ${_ref}`, `<b>Handover</b> · ${_ref} · ${dateStr}`, page);
     openPrintWindow(html);
   };
 
@@ -2382,7 +2390,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
         <div class="lede">Everything that must be ready at your site before the Visual Rhyme install team arrives with the ${r.builtWft.toFixed(2)} × ${r.builtHft.toFixed(2)}ft wall. Precise numbers, no fluff.</div>
       </div>
       <div class="atlas-plate">
-        <div class="cell"><div class="k">Client</div><div class="v">${_client||"—"}<small>${_project||"Site prep"}</small></div></div>
+        <div class="cell"><div class="k">Client</div><div class="v">${esc(_client)||"—"}<small>${esc(_project)||"Site prep"}</small></div></div>
         <div class="cell"><div class="k">Wall</div><div class="v"><em>${r.builtWft.toFixed(2)} × ${r.builtHft.toFixed(2)}</em> ft<small>${r.totalCabs} cabinets · ${r.totalSystemKg} kg total</small></div></div>
         <div class="cell"><div class="k">Ref</div><div class="v">${_ref}<small>Attach on all site queries</small></div></div>
       </div>
@@ -2545,7 +2553,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
         <div class="brand">Visual Rhyme<small>Powered by Microtronix Solutions · GSTIN 24AAWFM3775A1Z4</small></div>
         <div>Ahmedabad · 382481</div>
       </div>`;
-    const html = atlasPopup(`${_project||"VR"} — Site Prerequisites · ${_ref}`, `<b>Site Prerequisites</b> · ${_ref} · ${dateStr}`, page);
+    const html = atlasPopup(`${esc(_project)||"VR"} — Site Prerequisites · ${_ref}`, `<b>Site Prerequisites</b> · ${_ref} · ${dateStr}`, page);
     openPrintWindow(html);
   };
 
@@ -2584,7 +2592,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
         <div class="lede">Everything a designer, editor or DoP needs to know to make content that sings on your ${r.builtWft.toFixed(1)}×${r.builtHft.toFixed(1)}ft wall. Numbers pulled from the actual configuration you bought.</div>
       </div>
       <div class="atlas-plate">
-        <div class="cell"><div class="k">Client</div><div class="v">${_client||"—"}<small>${_project||"Content brief"}</small></div></div>
+        <div class="cell"><div class="k">Client</div><div class="v">${esc(_client)||"—"}<small>${esc(_project)||"Content brief"}</small></div></div>
         <div class="cell"><div class="k">Resolution</div><div class="v"><em>${r.pxW} × ${r.pxH}</em><small>${r.totalPixels.toLocaleString()} pixels total</small></div></div>
         <div class="cell"><div class="k">Aspect</div><div class="v">${r.aspectRatio}<small>${r.builtWft.toFixed(1)} × ${r.builtHft.toFixed(1)} ft physical</small></div></div>
       </div>
@@ -2709,7 +2717,7 @@ body{background:#180d24;color:#1A1208;font-family:'Manrope',sans-serif;-webkit-f
         <div class="brand">Visual Rhyme<small>Powered by Microtronix Solutions · GSTIN 24AAWFM3775A1Z4</small></div>
         <div>Ahmedabad · 382481</div>
       </div>`;
-    const html = atlasPopup(`${_project||"VR"} — Content Guide · ${_ref}`, `<b>Content Guide</b> · ${_ref} · ${dateStr}`, page);
+    const html = atlasPopup(`${esc(_project)||"VR"} — Content Guide · ${_ref}`, `<b>Content Guide</b> · ${_ref} · ${dateStr}`, page);
     openPrintWindow(html);
   };
 
